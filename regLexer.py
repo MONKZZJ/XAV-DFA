@@ -111,10 +111,13 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
         returnTokens.append(Token(TokenType.START, -1))
     elif token == '{':
         # 检查是否匹配量词格式 ^{(\d+),(\d*?)}
-        quantifier_match = re.match(r'^\{(\d+),(\d*?)\}', string)
+        quantifier_match = re.match(r'^\{(\d+)(,?)(\d*?)\}', string)
         if quantifier_match:
             min_val = int(quantifier_match.group(1))
-            max_val = int(quantifier_match.group(2)) if quantifier_match.group(2) else float('inf')
+            if quantifier_match.group(2):
+                max_val = int(quantifier_match.group(2)) if quantifier_match.group(2) else float('inf')
+            else:
+                max_val = min_val
             nextOffset = quantifier_match.end()
             returnTokens.append(Token(TokenType.OPEN_BRACE, min_val))
             returnTokens.append(Token(TokenType.CLOSED_BRACE, max_val))
