@@ -1,7 +1,5 @@
-from parser import ParseRegex, regexLexer, TokenType, collect_depth_limited_nodes,\
-    AstNode, STARTAstNode, OrAstNode, SeqAstNode, StarAstNode, PlusAstNode, QuestionMarkAstNode, \
-    LiteralCharacterAstNode, SquareBracketAstNode, QuantifierAstNode, AssertAstNode, \
-    BackReferenceAstNode, NonCapturingGroupAstNode
+from parser import *
+import csv
 
 class DFA:
     def __init__(self):
@@ -36,7 +34,7 @@ class DFA:
         for char in input_string:
             next_states = set()
             for state in current_states:
-                next_state = self.get_next_state(state, char)
+                next_state = self.get_next_state(state, ord(char))
                 if next_state is not None:
                     next_states.update(self.epsilon_closure({next_state}))
 
@@ -70,6 +68,14 @@ class DFA:
         print("Start state:", self.start_state)
         print("Accept states:", self.accept_states)
 
+    def to_transition_table(self):
+        table = [[-1 for _ in range(256)] for _ in range(256)]
+        for from_state, transitions in self.transitions.items():
+            for char, to_state in transitions.items():
+                if char:
+                    table[ord(char)][from_state] = to_state
+        return table
+
 
 def regex_to_dfa(regex):
 
@@ -85,21 +91,20 @@ def regex_to_dfa(regex):
             dfa.set_start_state(next_state)
             return traverse(node.right, next_state)
         if isinstance(node, LiteralCharacterAstNode):
-            if chr(node.char) == '.':
-                # print("here")
-                state_counter += 1
-                for char in range(256):
-                    next_state = state_counter
-                    dfa.add_state(next_state)
-                    dfa.add_transition(current_state, chr(char), next_state)
-                return next_state
-            else:
+            #if chr(node.char) == '.':
+                #next_state = state_counter
+                #state_counter += 1
+                #dfa.add_state(next_state)
+                #for char in range(256):
+                #    dfa.add_transition(current_state, chr(char), next_state)
+                #return next_state
+            #else:
                 # print('no any')
-                next_state = state_counter
-                state_counter += 1
-                dfa.add_state(next_state)
-                dfa.add_transition(current_state, chr(node.char), next_state)
-                return next_state
+            next_state = state_counter
+            state_counter += 1
+            dfa.add_state(next_state)
+            dfa.add_transition(current_state, node.char, next_state)
+            return next_state
         elif isinstance(node, SeqAstNode):
             for child in node.children:
                 current_state = traverse(child, current_state)
@@ -107,7 +112,15 @@ def regex_to_dfa(regex):
         elif isinstance(node, OrAstNode):
             left_state = traverse(node.left, current_state)
             right_state = traverse(node.right, current_state)
-            return max(left_state, right_state)
+
+            or_fin_state = state_counter
+            state_counter += 1
+            dfa.add_state(or_fin_state)
+
+            dfa.add_transition(left_state, '', or_fin_state)
+            dfa.add_transition(right_state, '', or_fin_state)
+
+            return or_fin_state
         elif isinstance(node, StarAstNode):
             next_state = state_counter
             state_counter += 1
@@ -132,19 +145,47 @@ def regex_to_dfa(regex):
             state_counter += 1
             dfa.add_state(next_state)
             # print(node.clas)
-            for char in node.clas:
-                dfa.add_transition(current_state, chr(char), next_state)
+            if node.negated:
+                for char in (i for i in range(256) if i not in node.clas):
+                    dfa.add_transition(current_state, char, next_state)
+            else:
+                for start, end in node.ranges:
+                    for char in range(start, end + 1):
+                        dfa.add_transition(current_state, char, next_state)
+                for char in node.clas:
+                    dfa.add_transition(current_state, char, next_state)
             return next_state
         elif isinstance(node, QuantifierAstNode):
-            min_state = traverse(node.left, current_state)
-            for _ in range(node.min - 1):
+            min_state = current_state
+            accept_states = []
+            for _ in range(node.min):
                 min_state = traverse(node.left, min_state)
-            if node.max is None:
+            accept_states.append(min_state)
+            print()
+            print(min_state)
+            print(state_counter)
+            if node.max is None or node.max == float('inf'):
                 dfa.add_transition(min_state, '', current_state)
+                next_state = traverse(node.left, min_state)
+                dfa.add_transition(next_state, '', min_state)
+                accept_states.append(next_state)
             else:
                 for _ in range(node.max - node.min):
-                    min_state = traverse(node.left, min_state)
-            return min_state
+                    state_counter -= 1
+                    next_state = state_counter
+                    state_counter += 1
+                    dfa.add_state(next_state)
+                    dfa.add_transition(min_state, '', next_state)
+                    min_state = traverse(node.left, next_state)
+                    accept_states.append(min_state)
+
+            Quantifier_fin_state = state_counter
+            state_counter += 1
+            dfa.add_state(Quantifier_fin_state)
+
+            for state in accept_states:
+                dfa.add_transition(state, '', Quantifier_fin_state)
+            return Quantifier_fin_state
         elif isinstance(node, AssertAstNode):
             return traverse(node.child, current_state)
         elif isinstance(node, BackReferenceAstNode):
@@ -158,7 +199,7 @@ def regex_to_dfa(regex):
     state_counter += 1
     dfa.add_state(start_state)
     dfa.set_start_state(start_state)
-    final_state = traverse(divided_ast, start_state)
+    final_state = traverse(ast, start_state)
     dfa.add_state(final_state, is_accept=True)
 
     return dfa
@@ -170,23 +211,46 @@ def precess_re(regex):
     ast = parser.parse()
     return ast
 
+def save_transition_table_to_file(trans_table, file_path):
+    with open(file_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        for row in trans_table:
+            writer.writerow(row)
 
 if __name__ == "__main__":
-    regex = r'^a+?.{2}b'
 
+    regex = r'/^a+?.{2}b(2(3))+[ds]{1,4}/'
 
+    '''
+    file_path = 'pcre_fields.csv'
+    regex_list = read_csv_to_regex_list(file_path)
+    with open('result.txt', 'w', encoding='utf-8') as file:
+
+        for regex in regex_list:
+            regex, flags = process_string(regex)
+            if not is_valid_regex(regex):
+                print(f'Invalid regex: {regex}')
+            else:
+                print("regex: ", regex)
+                file.write(f'regex : {regex}\n')
+                ast = precess_re(regex)
+                dfa = regex_to_dfa(ast)
+                test_string = 'filename=ll.png'
+                print(f"The string '{test_string}' is accepted by the DFA: {dfa.accepts(test_string)}")
+
+    '''
+    regex, flags = process_string(regex)
+    print("regex: ", regex)
     ast = precess_re(regex)
-    nodes = collect_depth_limited_nodes(ast)
+    dfa = regex_to_dfa(ast)
+    dfa.print_dfa()
 
-    for node in nodes:
-        divided_regex = node
-        print(f"Divided regex: {divided_regex}")
 
-        divided_ast = precess_re(divided_regex)
 
-        divided_dfa = regex_to_dfa(divided_regex)
+    # trans_table = dfa.to_transition_table()
+    # save_transition_table_to_file(trans_table, 'transition_table.csv')
+    #for row in trans_table:
+    #   print(row)
 
-        # divided_dfa.print_dfa()
-
-        test_string = 'aa'
-        print(f"The string '{test_string}' is accepted by the DFA: {divided_dfa.accepts(test_string)}")
+    test_string = 'aacab2323dssd'
+    print(f"The string '{test_string}' is accepted by the DFA: {dfa.accepts(test_string)}")

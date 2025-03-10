@@ -1,6 +1,7 @@
 # %% [markdown]
 # # lexer
 import re
+
 # * 输入: 一个字符串
 # * 输出: 一个标记列表
 
@@ -11,48 +12,53 @@ in_BR = False
 ast = None
 
 # %%
-from enum import Enum,auto
-class TokenType(Enum):
-  OR = auto()
-  STAR = auto()
-  PLUS = auto()
-  QUESTION_MARK = auto()
-  OPEN_PAREN = auto()
-  CLOSED_PAREN = auto()
-  OPEN_SQUARE_BRACKET = auto()
-  CLOSED_SQUARE_BRACKET = auto()
-  OPEN_BRACE = auto()
-  CLOSED_BRACE = auto()
-  DASH = auto()
-  COMMA = auto()
-  LITERAL = auto()
-  WORD = auto()
-  DIGIT = auto()
-  SPACE = auto()
-  NOTWORD = auto()
-  NOTDIGIT = auto()
-  NOTSPACE = auto()
+from enum import Enum, auto
 
-  NOT = auto()
-  TURE_ASSERT = auto()
-  FALSE_ASSERT = auto()
-  START = auto()
-  BACK_REFERENCE = auto()
-  NOT_GROUP = auto()
-  DIGITS = auto()
-  ANY = auto()
+
+class TokenType(Enum):
+    OR = auto()
+    STAR = auto()
+    PLUS = auto()
+    QUESTION_MARK = auto()
+    OPEN_PAREN = auto()
+    CLOSED_PAREN = auto()
+    OPEN_SQUARE_BRACKET = auto()
+    CLOSED_SQUARE_BRACKET = auto()
+    OPEN_BRACE = auto()
+    CLOSED_BRACE = auto()
+    DASH = auto()
+    COMMA = auto()
+    LITERAL = auto()
+    WORD = auto()
+    DIGIT = auto()
+    SPACE = auto()
+    NOTWORD = auto()
+    NOTDIGIT = auto()
+    NOTSPACE = auto()
+
+    NOT = auto()
+    TURE_ASSERT = auto()
+    FALSE_ASSERT = auto()
+    START = auto()
+    BACK_REFERENCE = auto()
+    NOT_GROUP = auto()
+    DIGITS = auto()
+    ANY = auto()
+
 
 class Token:
     ttype: TokenType
     content: str
-    def __init__(self, ttype, content:int = -1):
-        
+
+    def __init__(self, ttype, content: int = -1):
         self.ttype = ttype
         self.content = content
+
     def __repr__(self) -> str:
         return f"Token({self.ttype=}, {self.content=})"
-        
-def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int]:
+
+
+def getNextToken(string: str, tokenStream: list[Token]) -> tuple[list[Token], int]:
     global in_PAREN, in_sq_bracket, in_BR
     token = string[0]
     nextoffset = 1
@@ -62,8 +68,8 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
             returnTokens.append(Token(TokenType.LITERAL, ord(token)))
         else:
             returnTokens.append(Token(TokenType.OR, -1))
-    elif token == '.':
-        returnTokens.append(Token(TokenType.ANY, -1))
+    # elif token == '.':
+    #     returnTokens.append(Token(TokenType.ANY, -1))
     elif token == '*':
         if in_sq_bracket:
             returnTokens.append(Token(TokenType.LITERAL, ord(token)))
@@ -117,7 +123,9 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
     elif token == '^':
         returnTokens.append(Token(TokenType.START, -1))
     elif token == '{':
-        if string[1].isdigit():
+        if len(string) == 1 or not string[1].isdigit():  # 直接判断 '{' 是否是最后一个字符或者后面不是数字
+            returnTokens.append(Token(TokenType.LITERAL, ord(token)))
+        elif string[1].isdigit():
             in_BR = True
             in_PAREN += 1
             num_str = ''
@@ -156,7 +164,7 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
     elif token.isdigit():
         # print('DIG2LITE')
         returnTokens.append(Token(TokenType.LITERAL, ord(token)))
-        #else:
+        # else:
         #    print('DIG')
         #    num_str = token
         #    while nextoffset < len(string) and string[nextoffset].isdigit():
@@ -164,12 +172,12 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
         #        nextoffset += 1
         #    returnTokens.append(Token(TokenType.DIGITS, int(num_str)))
     elif token == '\\':
-        char = string[1]    
+        char = string[1]
         nextoffset = 2
         if char.isdigit():
             returnTokens.append(Token(TokenType.BACK_REFERENCE, int(char)))
-        elif char in ["+", "*", "?", "^", "$", "\\", "." , "-", "[", "]", "{", "}", "(", ")", "|", "/"]:
-            #  get ascii code 
+        elif char in ["+", "*", "?", "^", "$", "\\", ".", "-", "[", "]", "{", "}", "(", ")", "|", "/"]:
+            #  get ascii code
             returnTokens.append(Token(TokenType.LITERAL, ord(char)))
         elif char == "0":
             returnTokens.append(Token(TokenType.LITERAL, int(string[2:4], base=8)))
@@ -183,17 +191,18 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
                 assert end_index != -1, "Invalid unicode escape sequence"
                 assert (end_index - 3) % 2 == 0, "Invalid unicode escape sequence"
                 for i in range(3, end_index, 2):
-                    returnTokens.append(Token(TokenType.LITERAL, int(string[i:i+2], base=16)))
-                nextoffset = end_index + 1                    
+                    returnTokens.append(Token(TokenType.LITERAL, int(string[i:i + 2], base=16)))
+                nextoffset = end_index + 1
             else:
                 returnTokens.append(Token(TokenType.LITERAL, int(string[2:4], base=16)))
                 returnTokens.append(Token(TokenType.LITERAL, int(string[4:6], base=16)))
                 nextoffset = 6
         elif char == "c":
-            assert  not (ord("A") <= ord(string[2]) <= ord("Z") or ord("a") <= ord(string[2]) <= ord("z")), "Invalid control character"
+            assert not (ord("A") <= ord(string[2]) <= ord("Z") or ord("a") <= ord(string[2]) <= ord(
+                "z")), "Invalid control character"
             if ord(string[2]) < "a":
                 returnTokens.append(Token(TokenType.LITERAL, ord(string[2]) - ord("A") + 1))
-            else: 
+            else:
                 returnTokens.append(Token(TokenType.LITERAL, ord(string[2]) - ord("a") + 1))
         elif char == "t":
             returnTokens.append(Token(TokenType.LITERAL, ord("\t")))
@@ -223,10 +232,11 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
             returnTokens.append(Token(TokenType.LITERAL, ord(char)))
         # else:
         #     raise ValueError(f"here is a {char} which is Invalid escape sequence")
-        
+
     else:
         returnTokens.append(Token(TokenType.LITERAL, ord(token)))
     return returnTokens, nextoffset
+
 
 # %%
 class regexLexer:
@@ -234,6 +244,7 @@ class regexLexer:
     # output: token stream
     def __init__(self, regexStr):
         self.regexStr = regexStr
+
     def lexer(self):
         tokenStream = []
         next_token_index = 0
@@ -246,7 +257,8 @@ class regexLexer:
         #     token = Token(getTypeToken(self.regexStr[i]), self.regexStr[i])
         #     tokenStream.append(token)
         return tokenStream
-    
+
+
 # regexLexer = regexLexer('a|b')
 # tokenStream = regexLexer.lexer()
 # for token in tokenStream:
@@ -261,6 +273,7 @@ class regexLexer:
 # %%
 from abc import ABC, abstractmethod
 
+
 class AstNode(ABC):
     @abstractmethod
     def __init__(self):
@@ -269,15 +282,18 @@ class AstNode(ABC):
     def get_class_name(self):
         return self.__class__.__name__
 
+
 class QuantativeAstNode(AstNode):
     def __init__(self):
         self.lazy = False
+
 
 class OrAstNode(AstNode):
     def __init__(self, left, right):
         self.left = left
         self.right = right
-    
+
+
 class SeqAstNode(AstNode):
     def __init__(self, left, right):
         not_group = False
@@ -290,23 +306,32 @@ class SeqAstNode(AstNode):
             self.children.extend(right.children)
         else:
             self.children.append(right)
+
+
 class StarAstNode(QuantativeAstNode):
     def __init__(self, left):
         super().__init__()
         self.left = left
+
+
 class PlusAstNode(QuantativeAstNode):
     def __init__(self, left):
         super().__init__()
         self.left = left
+
+
 class QuestionMarkAstNode(AstNode):
     def __init__(self, left):
         self.left = left
+
+
 '''
 class STARTAstNode(PlusAstNode, QuestionMarkAstNode, AstNode):
     def __init__(self, right):
         super().__init__(False)
         self.right = right
 '''
+
 
 class STARTAstNode(AstNode):
     def __init__(self, right, parent_node=None):
@@ -318,12 +343,15 @@ class STARTAstNode(AstNode):
             # 调用父节点的方法
             self.parent_node.some_method()
 
+
 # 示例：创建 STARTAstNode 并组合其他节点
 # start_node = STARTAstNode(right=some_node, parent_node=PlusAstNode(False))
 
 class LiteralCharacterAstNode(AstNode):
     def __init__(self, char):
         self.char = char
+
+
 class SquareBracketAstNode(AstNode):
     # clas: set #of strs and pairs
     # for example: [a-z] -> {'a', 'b', 'c', ..., 'z'}
@@ -337,19 +365,26 @@ class SquareBracketAstNode(AstNode):
     def add_range(self, start, end):
         self.ranges.append((start, end))
 
+
 class QuantifierAstNode(QuantativeAstNode):
     def __init__(self, left, min, max=None):
         super().__init__()
         self.left = left
         self.min = min
         self.max = max
+
+
 class AssertAstNode(AstNode):
     def __init__(self, child, is_positive=True):
         self.child = child
         self.is_positive = is_positive
+
+
 class BackReferenceAstNode(AstNode):
     def __init__(self, index):
         self.index = index
+
+
 class NonCapturingGroupAstNode(AstNode):
     def __init__(self, child):
         self.child = child
@@ -368,10 +403,10 @@ def print_ast(node, indent=0):
         for child in node.children:
             print_ast(child, indent + 2)
     elif isinstance(node, StarAstNode):
-        print(' ' * indent + ('LAZY' if node.lazy else '')  + 'STAR')
+        print(' ' * indent + ('LAZY' if node.lazy else '') + 'STAR')
         print_ast(node.left, indent + 2)
     elif isinstance(node, PlusAstNode):
-        print(' ' * indent + ('LAZY' if node.lazy else '') +  'PLUS')
+        print(' ' * indent + ('LAZY' if node.lazy else '') + 'PLUS')
         print_ast(node.left, indent + 2)
     elif isinstance(node, QuestionMarkAstNode):
         print(' ' * indent + 'QUESTION_MARK')
@@ -403,6 +438,7 @@ def print_ast(node, indent=0):
     else:
         raise ValueError('Invalid AST node type')
 
+
 # %%
 ## let's define a CFG for the language
 # S -> E
@@ -420,7 +456,7 @@ def print_ast(node, indent=0):
 # OPEN_SQUARE_BRACKET -> '[' | epsilon
 # CLOSED_SQUARE_BRACKET -> ']' | epsilon
 # DASH -> '-' | epsilon
-# LITERAL -> any character except '|' '*', '+', '?', '(', ')', '[', ']', '\\', and '-' 
+# LITERAL -> any character except '|' '*', '+', '?', '(', ')', '[', ']', '\\', and '-'
 
 class ParseRegex:
     def __init__(self, tokenStream):
@@ -462,6 +498,7 @@ class ParseRegex:
                 right = self.parse_T()
                 ast = SeqAstNode(left, right)
         return ast
+
     def parse_C(self):
         # DEBUG
         # print(in_sq_bracket)
@@ -472,6 +509,8 @@ class ParseRegex:
         quantative_token_hit = False
 
         if self.match(TokenType.LITERAL):
+            # DEBUG
+            # print(self.tokenStream[self.currToken - 1].content)
             ast = LiteralCharacterAstNode(self.tokenStream[self.currToken - 1].content)
         elif self.match(TokenType.DIGITS):
             ast = LiteralCharacterAstNode(self.tokenStream[self.currToken - 1].content)
@@ -506,17 +545,19 @@ class ParseRegex:
             # print('here is a \d')
             ast = SquareBracketAstNode({i for i in range(10)})
         elif self.match(TokenType.WORD):
-            ast = SquareBracketAstNode({chr(i) for i in range(65, 91)} | {chr(i) for i in range(97, 123)} | {i for i in range(10)})
+            ast = SquareBracketAstNode(
+                {chr(i) for i in range(65, 91)} | {chr(i) for i in range(97, 123)} | {i for i in range(10)})
         elif self.match(TokenType.NOTSPACE):
             ast = SquareBracketAstNode({chr(i) for i in range(33, 127)})
         elif self.match(TokenType.NOTDIGIT):
             ast = SquareBracketAstNode({chr(i) for i in range(33, 48)} | {chr(i) for i in range(58, 127)})
         elif self.match(TokenType.NOTWORD):
-            ast = SquareBracketAstNode({chr(i) for i in range(33, 65)} | {chr(i) for i in range(91, 97)} | {chr(i) for i in range(123, 127)})
+            ast = SquareBracketAstNode(
+                {chr(i) for i in range(33, 65)} | {chr(i) for i in range(91, 97)} | {chr(i) for i in range(123, 127)})
         elif self.match(TokenType.BACK_REFERENCE):
             ast = BackReferenceAstNode(self.tokenStream[self.currToken - 1].content)
-        elif self.match(TokenType.ANY):
-            ast = LiteralCharacterAstNode(ord('.'))
+        # elif self.match(TokenType.ANY):
+        #     ast = LiteralCharacterAstNode(ord('.'))
         elif self.match(TokenType.START):
             right = self.parse_E()
             # print(right.get_class_name())
@@ -525,8 +566,6 @@ class ParseRegex:
         else:
             print('unknown token: ', type_now)
             ast = AstNode()
-
-
 
         if self.match(TokenType.STAR):
             ast = StarAstNode(ast)
@@ -553,7 +592,7 @@ class ParseRegex:
         if self.match(TokenType.QUESTION_MARK):
             assert quantative_token_hit, "Quantative token not hit"
             ast.lazy = True
-            
+
         return ast
 
     def parse_L(self):
@@ -577,13 +616,13 @@ class ParseRegex:
                 else:
                     # get last character in que
                     start = ord(chr(que.pop()))
+                    clas.pop()
                     end = ord(chr(self.tokenStream[self.currToken + 1].content))
                     # print(chr(start), chr(end))
                     # for i in range(start, end + 1):
                     #    clas.add(chr(i))
                     range.append((start, end))
                     self.currToken += 1
-
 
             self.currToken += 1
         return clas, range
@@ -600,6 +639,7 @@ class ParseRegex:
         if not self.match(ttype):
             raise Exception("Expected token")
 
+
 # %% [markdown]
 # # 测试需求1
 
@@ -614,9 +654,11 @@ def is_valid_regex(regex):
     except re.error:
         return False
 
+
 # %% [markdown]
 # # 运行
 import csv
+
 
 def read_csv_to_regex_list(file_path):
     regex_list = []
@@ -626,7 +668,8 @@ def read_csv_to_regex_list(file_path):
             regex_list.append(row[0])
     return regex_list
 
-def collect_depth_limited_nodes(node, max_depth=4, current_depth=0):
+
+def collect_depth_limited_nodes(node, max_depth=99, current_depth=0):
     result = []
     # print(f'current_depth: {current_depth}')
     if current_depth >= max_depth:
@@ -671,14 +714,36 @@ def collect_depth_limited_nodes(node, max_depth=4, current_depth=0):
                 result.append('^(' + temp_result[0] + ')')
                 for item in temp_result[1:]:
                     result.append(item)
+    elif isinstance(node, AssertAstNode):
+        temp_node = node.child
+        # print(temp_node.get_class_name())
+        temp_result = collect_depth_limited_nodes(temp_node, max_depth, current_depth + 1)
+        temp_result = list(set(temp_result) - set(result))
+        if temp_result:
+            print(temp_result)
+            if node.is_positive:
+                temp_result = ['(?=' + item + ')' for item in temp_result]
+            else:
+                temp_result = ['(?!' + item + ')' for item in temp_result]
+
+            result.extend(temp_result)
+            print(result)
 
     if isinstance(node, LiteralCharacterAstNode):
+        # special_chars = ['.', '^', '$', '*', '+', '?', '|', '\\', '(', ')', '[', ']', '{', '}']
+        # if chr(node.char) in special_chars:
+        #     result.append('\\' + chr(node.char))
+        # else:
         result.append(chr(node.char))
     elif isinstance(node, SeqAstNode):
         temp_result = []
+        # print("get a seq node")
+        # print(node.children)
         for child in node.children:
             # print(f'current_depth: {current_depth}, match a seq node')
             temp_result.extend(collect_depth_limited_nodes(child, max_depth, current_depth + 1))
+            # print("get a child:")
+            # print(child.get_class_name())
         # Merge consecutive literal characters
         merged_result = []
         temp_str = ''
@@ -697,28 +762,29 @@ def collect_depth_limited_nodes(node, max_depth=4, current_depth=0):
         # print(merged_result)
         result.extend(merged_result)
     elif isinstance(node, OrAstNode):
-        result.extend(collect_depth_limited_nodes(node.left, max_depth, current_depth + 1))
-        result.extend(collect_depth_limited_nodes(node.right, max_depth, current_depth + 1))
-    elif isinstance(node, AssertAstNode):
-        if node.is_positive:
-            result.append('?=')
-        else:
-            result.append('?!')
-        result.extend(collect_depth_limited_nodes(node.child, max_depth, current_depth + 1))
+        left_result = collect_depth_limited_nodes(node.left, max_depth, current_depth + 1)
+        right_result = collect_depth_limited_nodes(node.right, max_depth, current_depth + 1)
+        result.append('(' + '|'.join(left_result + right_result) + ')')
+
     elif isinstance(node, NonCapturingGroupAstNode):
         result.append('?:')
         result.extend(collect_depth_limited_nodes(node.child, max_depth, current_depth + 1))
     elif isinstance(node, SquareBracketAstNode):
-        if node.ranges:
-            for start, end in node.ranges:
-                result.append('[' + chr(start) + '-' + chr(end) + ']')
-        else:
-            result.append('[' + ''.join(chr(c) if isinstance(c, int) else c for c in node.clas) + ']')
+        bracket_content = []
+        if node.negated:
+            bracket_content.append('^')
+
+        for start, end in node.ranges:
+            bracket_content.append(chr(start) + '-' + chr(end))
+        for char in node.clas:
+            bracket_content.append(char)
+        result.append('[' + ''.join(bracket_content) + ']')
     elif isinstance(node, BackReferenceAstNode):
         result.append('\\' + str(node.index))
 
     elif isinstance(node, QuantifierAstNode):
-        quantifier_str = '{' + str(node.min) + (',' if node.max != 0 else '') + (str(node.max) if node.max > 0 and node.max != float('inf') else '') + '}'
+        quantifier_str = '{' + str(node.min) + (',' if node.max != 0 else '') + (
+            str(node.max) if node.max > 0 and node.max != float('inf') else '') + '}'
         left_nodes = collect_depth_limited_nodes(node.left, max_depth, current_depth + 1)
         if left_nodes:
             result.append(left_nodes[0] + quantifier_str)
@@ -727,6 +793,8 @@ def collect_depth_limited_nodes(node, max_depth=4, current_depth=0):
             result.append(quantifier_str)
 
     return result
+
+
 def req1(regex):
     print('Req 1 : regex to NFA')
     regexlexer = regexLexer(regex)
@@ -740,6 +808,7 @@ def req1(regex):
     nodes = collect_depth_limited_nodes(AST)
     print('Nodes: ', nodes)
     return nodes
+
 
 def process_string(input_string):
     # 找到第一个和第二个'/'的位置
@@ -758,7 +827,13 @@ def process_string(input_string):
     else:
         after_slash = ""
 
+    # 处理 `(^|&)` 结构
+    middle_part = re.sub(r'(\(\^|\&\))', r'\\\1', middle_part)
+    # 将非转义的字符 `.` 替换为字符集 `[^\n]`
+    middle_part = re.sub(r'(?<!\\)\.', r'[^\n]', middle_part)
+
     return middle_part, after_slash
+
 
 def main():
     file_path = 'pcre_fields.csv'
@@ -774,21 +849,19 @@ def main():
                 file.write(f'regex : {regex}\n')
                 file.write(f'nodes : {node}\n')
 
-
-
-
-
-#if __name__ == "__main__":
+# if __name__ == "__main__":
 #    main()
 
 # regexTestBouns1='((((AB)|[A-Z])+)([A-Z]*))'
 # regexTestBouns2='(((((ABE)|C)|((([A-Z])S)*))+)((AB)C))'
 # regexTestBouns3='((([a-z_])(([a-z0-9_])*))(([!?])?))'
 # regex = r'^a+?.{2}b'  # '(?=foo)bar'
+# regex = r'http\x3A\x2f\x2f1\.usa\.gov\x2f[a-f0-9]{6,8}'
+#  = r'abc|d\?'
 
-#if not is_valid_regex(regex):
+# if not is_valid_regex(regex):
 #   print('invalid regex compilation failed')
-#else:
+# else:
 # req1(regex)
 
 
