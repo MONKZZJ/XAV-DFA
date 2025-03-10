@@ -7,151 +7,101 @@
 from abc import ABC, abstractmethod
 
 class AstNode(ABC):
+    
     @abstractmethod
     def __init__(self):
+        self.quantative = False
+        self.min_repeat = 1
+        self.max_repeat = 1
+        self.greedy = False
+        self.start = False
+        self.end = False
+    
+    def getState(self):
+        pattern = ""
+        if self.quantative:
+            pattern += f" min: {self.min_repeat}, max: {self.max_repeat}, greedy: {self.greedy}"
+        if self.start:
+            pattern += " start"
+        if self.end:
+            pattern += " end"
+        return pattern
+    
+    @abstractmethod
+    def print(self, depth=0):
         pass
-
-    def get_class_name(self):
-        return self.__class__.__name__
-
-class QuantativeAstNode(AstNode):
-    def __init__(self):
-        self.lazy = False
 
 class OrAstNode(AstNode):
     def __init__(self, left, right):
+        super().__init__()
         self.left = left
         self.right = right
-    
+    def print(self, depth=0):
+        print(" " * depth + "OR", self.getState())
+        self.left.print(depth + 1)
+        self.right.print(depth + 1)
+
 class SeqAstNode(AstNode):
-    def __init__(self, left, right):
-        not_group = False
-        self.children = []
-        if isinstance(left, SeqAstNode):
-            self.children.extend(left.children)
-        else:
-            self.children.append(left)
-        if isinstance(right, SeqAstNode):
-            self.children.extend(right.children)
-        else:
-            self.children.append(right)
-class StarAstNode(QuantativeAstNode):
-    def __init__(self, left):
+    def __init__(self, children: list[AstNode] = None):
         super().__init__()
-        self.left = left
-class PlusAstNode(QuantativeAstNode):
-    def __init__(self, left):
+        if children is None:
+            children = []
+        self.children = children
+    def print(self, depth=0):
+        print(" " * depth + "SEQ", self.getState())
+        for child in self.children:
+            child.print(depth + 1)
+        
+
+class LiteralGroupAstNode(AstNode):
+    def __init__(self, chars: list[int] = None):
         super().__init__()
-        self.left = left
-class QuestionMarkAstNode(AstNode):
-    def __init__(self, left):
-        self.left = left
-'''
-class STARTAstNode(PlusAstNode, QuestionMarkAstNode, AstNode):
-    def __init__(self, right):
-        super().__init__(False)
-        self.right = right
-'''
+        if chars is None:
+            chars = []
+        self.chars = chars
+    
+    def print(self, depth=0):
+        print(" " * depth + "LITERAL_GROUP", self.getState())
 
-class STARTAstNode(AstNode):
-    def __init__(self, right, parent_node=None):
-        self.right = right
-        self.parent_node = parent_node  # 组合其他节点
+class LiteralCharacterAstNode(LiteralGroupAstNode):
+    def __init__(self, char: int):
+        super().__init__([char])
+        
+    def print(self, depth=0):
+        print(" " * depth + "LITERAL", chr(self.chars[0]), self.getState())
 
-    def some_method(self):
-        if self.parent_node:
-            # 调用父节点的方法
-            self.parent_node.some_method()
+class LiteralSpecialCharacterAstNode(LiteralGroupAstNode):
+    def __init__(self, reversed:bool, isWord=False, isDigit=False, isSpace=False):
+        assert isWord or isDigit or isSpace, "at least one of isWord, isDigit, isSpace must be True"
+        assert isWord + isDigit + isSpace == 1, "only one of isWord, isDigit, isSpace can be True"
+        chars = []
+        if isWord:
+            chars = [ord(c) for c in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_']
+            self.description = 'word'
+        elif isDigit:
+            chars = [ord(c) for c in '0123456789']
+            self.description = 'digit'
+        elif isSpace:
+            chars = [ord(c) for c in '  \n\r\f\v']
+            self.description = 'space'
+        if reversed:
+            self.description += ' reversed'
+            newchars = []
+            for i in range(256):
+                if i not in chars:
+                    newchars.append(i)
+            chars = newchars
+        super().__init__(chars)
+    def print(self, depth=0):
+        print(" " * depth + "LITERAL_SPECIAL_CHARACTER", self.getState())
 
-# 示例：创建 STARTAstNode 并组合其他节点
-# start_node = STARTAstNode(right=some_node, parent_node=PlusAstNode(False))
-
-class LiteralCharacterAstNode(AstNode):
-    def __init__(self, char):
-        self.char = char
 class SquareBracketAstNode(AstNode):
-    # clas: set #of strs and pairs
-    # for example: [a-z] -> {'a', 'b', 'c', ..., 'z'}
-    # [a-z0-9] -> {'a', 'b', 'c', ..., 'z', '0', '1', ..., '9'
-    # [a-Z012] -> {'a', 'b', 'c', ..., 'Z', '0', '1', '2'}
-    def __init__(self, clas):
-        self.clas = clas
-        self.negated = False
-        self.ranges = []
-
-    def add_range(self, start, end):
-        self.ranges.append((start, end))
-
-class QuantifierAstNode(QuantativeAstNode):
-    def __init__(self, left, min, max=None):
+    def __init__(self, children: list[AstNode] = [], reversed = False):
         super().__init__()
-        self.left = left
-        self.min = min
-        self.max = max
-class AssertAstNode(AstNode):
-    def __init__(self, child, is_positive=True):
-        self.child = child
-        self.is_positive = is_positive
-class BackReferenceAstNode(AstNode):
-    def __init__(self, index):
-        self.index = index
-class NonCapturingGroupAstNode(AstNode):
-    def __init__(self, child):
-        self.child = child
-
-
-def print_ast(node, indent=0):
-    """
-    打印AST节点
-
-    参数:
-    node (AstNode): AST节点
-    indent (int): 缩进级别
-    """
-    if isinstance(node, OrAstNode):
-        print(' ' * indent + 'OR')
-        print_ast(node.left, indent + 2)
-        print_ast(node.right, indent + 2)
-    elif isinstance(node, STARTAstNode):
-        print(' ' * indent + 'START_WITH')
-        print_ast(node.right, indent + 2)
-    elif isinstance(node, SeqAstNode):
-        print(' ' * indent + 'SEQ')
-        for child in node.children:
-            print_ast(child, indent + 2)
-    elif isinstance(node, StarAstNode):
-        print(' ' * indent + ('LAZY' if node.lazy else '')  + 'STAR')
-        print_ast(node.left, indent + 2)
-    elif isinstance(node, PlusAstNode):
-        print(' ' * indent + ('LAZY' if node.lazy else '') +  'PLUS')
-        print_ast(node.left, indent + 2)
-    elif isinstance(node, QuestionMarkAstNode):
-        print(' ' * indent + 'QUESTION_MARK')
-        print_ast(node.left, indent + 2)
-    elif isinstance(node, LiteralCharacterAstNode):
-        print(' ' * indent + 'LITERAL: ' + str(node.char))
-    elif isinstance(node, SquareBracketAstNode):
-        print(' ' * indent + ('NEG-' if node.negated else '') + 'SQUARE_BRACKET')
-        if node.clas:
-            for char in node.clas:
-                if isinstance(char, tuple):
-                    print(' ' * (indent + 2) + 'RANGE: {}-{}'.format(char[0], char[1]))
-                else:
-                    print(' ' * (indent + 2) + 'CHARACTER: {}'.format(char))
-        if node.ranges:
-            for start, end in node.ranges:
-                print(' ' * (indent + 2) + 'RANGE: {}-{}'.format(chr(start), chr(end)))
-    elif isinstance(node, AssertAstNode):
-        print(' ' * indent + ('POSITIVE' if node.is_positive else 'NEGATIVE') + 'ASSERT')
-        print_ast(node.child, indent + 2)
-    elif isinstance(node, BackReferenceAstNode):
-        print(' ' * indent + 'BACKREFERENCE: {}'.format(node.index))
-    elif isinstance(node, QuantifierAstNode):
-        print(' ' * indent + 'QUANTIFIER: {}-{}'.format(node.min, node.max))
-        print_ast(node.left, indent + 2)
-    elif isinstance(node, NonCapturingGroupAstNode):
-        print(' ' * indent + 'NON_CAPTURING_GROUP')
-        print_ast(node.child, indent + 2)
-    else:
-        raise ValueError('Invalid AST node type')
-
+        self.children = children
+        self.reversed = reversed
+    def print(self, depth=0):
+        print(" " * depth + "SQUARE_BRACKET", [child.chars[0] for child in self.children], self.getState())
+    
+    def getState(self):
+        return super().getState() + f" reversed: {self.reversed}"

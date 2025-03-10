@@ -18,7 +18,6 @@ class TokenType(Enum):
   OPEN_BRACE = auto()
   CLOSED_BRACE = auto()
   DASH = auto()
-  COMMA = auto()
   LITERAL = auto()
   WORD = auto()
   DIGIT = auto()
@@ -26,15 +25,16 @@ class TokenType(Enum):
   NOTWORD = auto()
   NOTDIGIT = auto()
   NOTSPACE = auto()
-
   NOT = auto()
+  START = auto()
+  ANY = auto()
+  END = auto()
+  
+  # below not suppoerted
   TURE_ASSERT = auto()
   FALSE_ASSERT = auto()
-  START = auto()
   BACK_REFERENCE = auto()
   NOT_GROUP = auto()
-  DIGITS = auto()
-  ANY = auto()
 
 class Token:
     ttype: TokenType
@@ -109,13 +109,15 @@ def getNextToken(string: str, tokenStream:list[Token]) -> tuple[list[Token], int
         returnTokens.append(Token(TokenType.LITERAL, ord('-')))
     elif token == '^':
         returnTokens.append(Token(TokenType.START, -1))
+    elif token == '$':
+        returnTokens.append(Token(TokenType.END, -1))
     elif token == '{':
         # 检查是否匹配量词格式 ^{(\d+),(\d*?)}
         quantifier_match = re.match(r'^\{(\d+)(,?)(\d*?)\}', string)
         if quantifier_match:
             min_val = int(quantifier_match.group(1))
             if quantifier_match.group(2):
-                max_val = int(quantifier_match.group(2)) if quantifier_match.group(2) else float('inf')
+                max_val = int(quantifier_match.group(3)) if quantifier_match.group(3) else -1
             else:
                 max_val = min_val
             nextOffset = quantifier_match.end()

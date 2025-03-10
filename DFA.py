@@ -1,7 +1,4 @@
-from regParser import ParseRegex, RegexLexer, TokenType, collect_depth_limited_nodes,\
-    AstNode, STARTAstNode, OrAstNode, SeqAstNode, StarAstNode, PlusAstNode, QuestionMarkAstNode, \
-    LiteralCharacterAstNode, SquareBracketAstNode, QuantifierAstNode, AssertAstNode, \
-    BackReferenceAstNode, NonCapturingGroupAstNode
+from regParser import RegexParser, RegexLexer,  OrAstNode, SeqAstNode, LiteralCharacterAstNode, SquareBracketAstNode
 
 class DFA:
     def __init__(self):
@@ -80,6 +77,7 @@ class DFA:
 
 
 def regex_to_dfa(regex):
+    raise NotImplementedError("unchecked")
     # 将正则表达式转换为DFA
     dfa = DFA()
     state_counter = 0
@@ -180,33 +178,33 @@ def regex_to_dfa(regex):
 
     return dfa
 
-def precess_re(regex):
-    # 处理正则表达式并返回其AST
-    lexer = RegexLexer(regex)
-    tokenStream = lexer.lexer()
-    parser = ParseRegex(tokenStream)
-    ast = parser.parse()
-    return ast
-
 
 if __name__ == "__main__":
-    regex = r'^a+?.{2}b'
+    regex = r'^a+?.{2}b(2(3))+[ds]{1,2}'
+    print(regex)
+    
+    lexer = RegexLexer(regex)
+    tokenStream = lexer.lexer()
+    [ print(token) for token in tokenStream ]
+    
+    parser = RegexParser(tokenStream)
+    ast = parser.parseStream()
+    ast.print()
+    # print_ast(ast)
+    
+    # nodes = collect_depth_limited_nodes(ast)
 
-    # 处理正则表达式并生成其AST
-    ast = precess_re(regex)
-    nodes = collect_depth_limited_nodes(ast)
+    # for node in nodes:
+    #     divided_regex = node
+    #     # print(f"Divided regex: {divided_regex}")
 
-    for node in nodes:
-        divided_regex = node
-        print(f"Divided regex: {divided_regex}")
+    #     divided_ast = precess_re(divided_regex)
 
-        divided_ast = precess_re(divided_regex)
+    #     # 将分割的AST转换为DFA
+    #     divided_dfa = regex_to_dfa(divided_regex)
 
-        # 将分割的AST转换为DFA
-        divided_dfa = regex_to_dfa(divided_regex)
+    #     # 打印DFA
+    #     divided_dfa.print_dfa()
 
-        # 打印DFA
-        divided_dfa.print_dfa()
-
-        test_string = 'aa'
-        print(f"字符串 '{test_string}' 被DFA接受: {divided_dfa.accepts(test_string)}")
+    #     test_string = 'aa'
+    #     # print(f"字符串 '{test_string}' 被DFA接受: {divided_dfa.accepts(test_string)}")

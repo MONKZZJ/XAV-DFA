@@ -1,268 +1,159 @@
-# %% [markdown]
-# # lexer
 import re
-# * 输入: 一个字符串
-# * 输出: 一个标记列表
 
-from regLexer import TokenType, RegexLexer
+from regLexer import TokenType, RegexLexer, Token
 from astNodes import *
 
-# %%
-## let's define a CFG for the language
-# S -> E
-# E -> T '|' E | T
-# T -> C F T | C
-# F -> '*' | '+' | '?' | epsilon
-# C -> L | '(' E ')' | '[' L DASH L ']' | epsilon
-# L -> LITERAL | ESCAPED
-# OR -> '|' | epsilon
-# STAR -> '*' | epsilon
-# PLUS -> '+' | epsilon
-# QUESTION_MARK -> '?' | epsilon
-# OPEN_PAREN -> '(' | epsilon
-# CLOSED_PAREN -> ')' | epsilon
-# OPEN_SQUARE_BRACKET -> '[' | epsilon
-# CLOSED_SQUARE_BRACKET -> ']' | epsilon
-# DASH -> '-' | epsilon
-# LITERAL -> any character except '|' '*', '+', '?', '(', ')', '[', ']', '\\', and '-' 
-
-class ParseRegex:
+class RegexParser:
     def __init__(self, tokenStream):
         self.tokenStream = tokenStream
-        self.currToken = 0
 
-    def advance(self):
-        """
-        前进到下一个标记
-        """
-        self.currToken += 1
-
-    def parse(self):
-        """
-        解析标记流并生成AST
-
-        返回:
-        AstNode: AST根节点
-        """
-        ast = self.parse_E()
-        if self.currToken < len(self.tokenStream):
-            print(len(self.tokenStream))
-            print(self.currToken)
-            raise Exception("Unexpected token: ")
-
-        return ast
-
-    def parse_E(self):
-        """
-        解析E规则
-
-        返回:
-        AstNode: AST节点
-        """
-        ast = self.parse_T()
-        if self.match(TokenType.OR):
-            left = ast
-            right = self.parse_E()
-            ast = OrAstNode(left, right)
-        return ast
-
-    def parse_T(self):
-        """
-        解析T规则
-
-        返回:
-        AstNode: AST节点
-        """
-        ast = self.parse_C()
-        if self.currToken < len(self.tokenStream):
-            ttype = self.tokenStream[self.currToken].ttype
-            # print(f'get a {ttype}')
-            if ttype in [TokenType.LITERAL, TokenType.DIGITS, TokenType.ANY,
-                         TokenType.OPEN_PAREN, TokenType.OPEN_SQUARE_BRACKET,
-                         TokenType.DIGIT, TokenType.NOTDIGIT,
-                         TokenType.SPACE, TokenType.NOTSPACE,
-                         TokenType.WORD, TokenType.NOTWORD,
-                         TokenType.BACK_REFERENCE]:
-                left = ast
-                right = self.parse_T()
-                ast = SeqAstNode(left, right)
-        return ast
-    def parse_C(self):
-        """
-        解析C规则
-
-        返回:
-        AstNode: AST节点
-        """
-        # DEBUG
-        # print(in_sq_bracket)
-        # print('in parse_C is ')
-        type_now = self.tokenStream[self.currToken - 1].ttype
-        # print(type_now)
-
-        quantative_token_hit = False
-
-        if self.match(TokenType.LITERAL):
-            ast = LiteralCharacterAstNode(self.tokenStream[self.currToken - 1].content)
-        elif self.match(TokenType.DIGITS):
-            ast = LiteralCharacterAstNode(self.tokenStream[self.currToken - 1].content)
-        elif self.match(TokenType.OPEN_PAREN):
-            if self.match(TokenType.TURE_ASSERT):
-                ast = self.parse_E()
-                ast = AssertAstNode(ast, True)
-            elif self.match(TokenType.FALSE_ASSERT):
-                ast = self.parse_E()
-                ast = AssertAstNode(ast, False)
-            elif self.match(TokenType.NOT_GROUP):
-                ast = self.parse_E()
-                ast = NonCapturingGroupAstNode(ast)
+    def getNextNodeLength(self, stream: list[Token]) -> int:
+        token = stream[0]
+        temp_length = 1
+        if token.ttype in [TokenType.LITERAL, TokenType.WORD, TokenType.NOTWORD, TokenType.DIGIT, TokenType.NOTDIGIT, TokenType.SPACE, TokenType.NOTSPACE, TokenType.ANY]:
+            pass
+        elif token.ttype == TokenType.OPEN_PAREN:
+            level = 1
+            for i in range(1, len(stream)):
+                if stream[i].ttype == TokenType.OPEN_PAREN:
+                    level += 1
+                elif stream[i].ttype == TokenType.CLOSED_PAREN:
+                    level -= 1
+                    if level == 0:
+                        temp_length = i + 1
+                        break
             else:
-                ast = self.parse_E()
-
-            self.expect(TokenType.CLOSED_PAREN)
-
-        elif self.match(TokenType.OPEN_SQUARE_BRACKET):
-            negated = False
-            if self.match(TokenType.NOT):
-                negated = True
-            clas, ranges = self.parse_L()
-            self.expect(TokenType.CLOSED_SQUARE_BRACKET)
-            ast = SquareBracketAstNode(clas)
-            ast.ranges = ranges
-            if negated:
-                ast.negated = True
-        elif self.match(TokenType.SPACE):
-            ast = SquareBracketAstNode({' '})
-        elif self.match(TokenType.DIGIT):
-            # print('here is a \d')
-            ast = SquareBracketAstNode({i for i in range(10)})
-        elif self.match(TokenType.WORD):
-            ast = SquareBracketAstNode({chr(i) for i in range(65, 91)} | {chr(i) for i in range(97, 123)} | {i for i in range(10)})
-        elif self.match(TokenType.NOTSPACE):
-            ast = SquareBracketAstNode({chr(i) for i in range(33, 127)})
-        elif self.match(TokenType.NOTDIGIT):
-            ast = SquareBracketAstNode({chr(i) for i in range(33, 48)} | {chr(i) for i in range(58, 127)})
-        elif self.match(TokenType.NOTWORD):
-            ast = SquareBracketAstNode({chr(i) for i in range(33, 65)} | {chr(i) for i in range(91, 97)} | {chr(i) for i in range(123, 127)})
-        elif self.match(TokenType.BACK_REFERENCE):
-            ast = BackReferenceAstNode(self.tokenStream[self.currToken - 1].content)
-        elif self.match(TokenType.ANY):
-            ast = LiteralCharacterAstNode(ord('.'))
-        elif self.match(TokenType.START):
-            right = self.parse_E()
-            # print(right.get_class_name())
-            ast = STARTAstNode(right, right.get_class_name())
-
+                raise Exception("unbalanced parenthesis")
+        elif token.ttype == TokenType.OPEN_SQUARE_BRACKET:
+            level = 1
+            for i in range(1, len(stream)):
+                if stream[i].ttype == TokenType.OPEN_SQUARE_BRACKET:
+                    level += 1
+                elif stream[i].ttype == TokenType.CLOSED_SQUARE_BRACKET:
+                    level -= 1
+                    if level == 0:
+                        temp_length = i + 1
+                        break
+            else:
+                raise Exception("unbalanced square brackets")
         else:
-            print('unknown token: ', type_now)
-            ast = AstNode()
+            raise Exception(f"token type {token.ttype} should not be here")
+        ## check quantifier
+        if temp_length < len(stream):
+            next_token = stream[temp_length]
+            if next_token.ttype == TokenType.QUESTION_MARK:
+                temp_length += 1
+            else:
+                # check multiple quantifiers
+                if next_token.ttype in [TokenType.STAR, TokenType.PLUS]:
+                    temp_length += 1
+                elif next_token.ttype == TokenType.OPEN_BRACE:
+                    assert stream[temp_length+1] == TokenType.CLOSED_BRACE, "invalid quantifier"
+                    temp_length += 2
+                # check greedy mark
+                if temp_length < len(stream):
+                    next_token = stream[temp_length]
+                    if next_token.ttype == TokenType.QUESTION_MARK:
+                        temp_length += 1
+        return temp_length
 
 
-
-        if self.match(TokenType.STAR):
-            ast = StarAstNode(ast)
-            quantative_token_hit = True
-        elif self.match(TokenType.PLUS):
-            ast = PlusAstNode(ast)
-            quantative_token_hit = True
-
-        elif self.match(TokenType.OPEN_BRACE):
-            min_val = self.tokenStream[self.currToken - 1].content
-            max_val = None
-            if self.match(TokenType.CLOSED_BRACE):
-                max_val = self.tokenStream[self.currToken - 1].content
-                # DEBUG
-                # print('min_val: ', min_val)
-                # print('max_val: ', max_val)
-            ast = QuantifierAstNode(ast, min_val, max_val)
-            # print(ast.char)
-            quantative_token_hit = True
-
-        elif self.match(TokenType.QUESTION_MARK):
-            ast = QuestionMarkAstNode(ast)
-
-        if self.match(TokenType.QUESTION_MARK):
-            assert quantative_token_hit, "Quantative token not hit"
-            ast.lazy = True
-            
-        return ast
-
-    def parse_L(self):
-        """
-        解析L规则
-
-        返回:
-        tuple[set, list]: 字符集合和范围列表
-        """
-        clas = set()
-        que = []
-        range = []
-        while self.currToken < len(self.tokenStream):
-            ttype = self.tokenStream[self.currToken].ttype
-            # print(ttype)
-            if ttype == TokenType.CLOSED_SQUARE_BRACKET:
-                break
-            elif ttype == TokenType.LITERAL or ttype == TokenType.DIGITS:
-                clas.add(self.tokenStream[self.currToken].content)
-                que.append(self.tokenStream[self.currToken].content)
-
-            elif ttype == TokenType.DASH:
-                if len(clas) == 0 \
-                        or self.currToken + 1 == len(self.tokenStream) \
-                        or self.tokenStream[self.currToken + 1].ttype == TokenType.CLOSED_SQUARE_BRACKET:
-                    clas.add('-')
+    def parseStream(self, stream: list[Token]=None) -> SeqAstNode:
+        if stream is None:
+            stream = self.tokenStream
+        root = SeqAstNode()
+        stream_pointer = 0
+        while stream_pointer < len(stream):
+            token = stream[stream_pointer]
+            stream_pointer += 1
+            if token.ttype == TokenType.OR:
+                assert root.children.length > 0, "OR must have left children"
+                lastNode  = root.children[-1]
+                nextNodeLength = self.getNextNodeLength(stream[stream_pointer:])
+                nextNode = self.parseStream(stream[stream_pointer:stream_pointer+nextNodeLength])
+                root.children[-1] = OrAstNode(lastNode, nextNode)
+                stream_pointer += nextNodeLength
+            elif token.ttype in [TokenType.STAR, TokenType.PLUS, TokenType.QUESTION_MARK, TokenType.OPEN_BRACE]:
+                nextOffset = 0
+                assert len(root.children) > 0, "quantifier must have left children"
+                lastNode = root.children[-1]
+                assert lastNode.quantative == False, "last token have quantifier"
+                lastNode.quantative = True
+                if token.ttype == TokenType.QUESTION_MARK:
+                    lastNode.min_repeat = 0
+                    lastNode.max_repeat = 1
                 else:
-                    # get last character in que
-                    start = ord(chr(que.pop()))
-                    end = ord(chr(self.tokenStream[self.currToken + 1].content))
-                    # print(chr(start), chr(end))
-                    # for i in range(start, end + 1):
-                    #    clas.add(chr(i))
-                    range.append((start, end))
-                    self.currToken += 1
-
-
-            self.currToken += 1
-        return clas, range
-
-    def match(self, ttype):
-        """
-        匹配当前标记类型
-
-        参数:
-        ttype (TokenType): 标记类型
-
-        返回:
-        bool: 是否匹配
-        """
-        if self.currToken >= len(self.tokenStream):
-            return False
-        if self.tokenStream[self.currToken].ttype == ttype:
-            self.currToken += 1
-            return True
-        return False
-
-    def expect(self, ttype):
-        """
-        期望匹配当前标记类型
-
-        参数:
-        ttype (TokenType): 标记类型
-
-        抛出:
-        Exception: 如果不匹配则抛出异常
-        """
-        if not self.match(ttype):
-            raise Exception("Expected token")
-
-# %% [markdown]
-# # 测试需求1
-
-# %%
-import re
-
+                    if token.ttype == TokenType.STAR:
+                        lastNode.min_repeat = 0
+                        lastNode.max_repeat = -1
+                    elif token.ttype == TokenType.PLUS:
+                        lastNode.min_repeat = 1
+                        lastNode.max_repeat = -1
+                    elif token.ttype == TokenType.OPEN_BRACE:
+                        assert stream[stream_pointer].ttype == TokenType.CLOSED_BRACE, "invalid quantifier"
+                        lastNode.min_repeat = int(token.content)
+                        lastNode.max_repeat = int(stream[stream_pointer].content)
+                        nextOffset = 1
+                    # check greedy mark 
+                    if stream_pointer + nextOffset < len(stream) and stream[stream_pointer + nextOffset].ttype == TokenType.QUESTION_MARK:
+                        lastNode.greedy = True
+                        nextOffset += 1
+                stream_pointer += nextOffset
+            elif token.ttype == TokenType.OPEN_PAREN:
+                assert stream[0].ttype not in [TokenType.TURE_ASSERT, TokenType.FALSE_ASSERT, TokenType.NOT_GROUP], "assertion not supported"
+                nextOffset = 0
+                depth = 1
+                for i in range(stream_pointer, len(stream)):
+                    if stream[i].ttype == TokenType.OPEN_PAREN:
+                        depth += 1
+                    elif stream[i].ttype == TokenType.CLOSED_PAREN:
+                        depth -= 1
+                        if depth == 0:
+                            nextOffset = i + 1
+                            break                    
+                else:
+                    raise Exception("unbalanced parenthesis")
+                root.children.append(self.parseStream(stream[stream_pointer:nextOffset-1]))
+                stream_pointer = nextOffset
+            elif token.ttype == TokenType.OPEN_SQUARE_BRACKET:
+                reversed = False
+                if stream[stream_pointer].ttype == TokenType.NOT:
+                    reversed = True
+                    stream_pointer += 1
+                for i in range(stream_pointer, len(stream)):
+                    if stream[i].ttype == TokenType.CLOSED_SQUARE_BRACKET:
+                        nextOffset = i + 1
+                        break
+                else:
+                    raise Exception("unbalanced square brackets")
+                node = SquareBracketAstNode(self.parseStream(stream[stream_pointer:nextOffset-1]).children, reversed)
+                root.children.append(node)
+                stream_pointer = nextOffset
+            elif token.ttype in [TokenType.NOTWORD, TokenType.WORD, TokenType.NOTSPACE, TokenType.SPACE, TokenType.NOTDIGIT, TokenType.DIGIT]:
+                root.children.append(LiteralCharacterAstNode(token.ttype))
+                if token.ttype in [TokenType.WORD, TokenType.SPACE, TokenType.DIGIT]:
+                    node = LiteralSpecialCharacterAstNode(False, token.ttype==TokenType.WORD, token.ttype==TokenType.SPACE, token.ttype==TokenType.DIGIT)
+                elif token.ttype in [TokenType.NOTWORD, TokenType.NOTSPACE, TokenType.NOTDIGIT]:
+                    node = LiteralSpecialCharacterAstNode(True, token.ttype==TokenType.NOTWORD, token.ttype==TokenType.NOTSPACE, token.ttype==TokenType.NOTDIGIT)
+                root.children.append(node)
+            elif token.ttype == TokenType.START:
+                assert len(root.children) == 0, "start must have no children"
+                root.start = True
+            elif token.ttype == TokenType.END:
+                assert stream_pointer == len(stream), "end must be the last token"
+                root.end = True
+            elif token.ttype == TokenType.ANY:
+                # Equivalent to [^\n\r].
+                node = SquareBracketAstNode([LiteralCharacterAstNode(ord('\n')), LiteralCharacterAstNode(ord('\r'))], True)
+                root.children.append(node)
+            elif token.ttype == TokenType.LITERAL:
+                root.children.append(LiteralCharacterAstNode(token.content))
+            else:
+                raise NotImplementedError(f"token type {token.ttype} not implemented")
+        return root
 
 def is_valid_regex(regex):
+    raise NotImplementedError("unchecked")
     """
     检查正则表达式是否有效
 
@@ -283,6 +174,7 @@ def is_valid_regex(regex):
 import csv
 
 def read_csv_to_regex_list(file_path):
+    raise NotImplementedError("unchecked")
     """
     从CSV文件读取正则表达式列表
 
@@ -300,6 +192,7 @@ def read_csv_to_regex_list(file_path):
     return regex_list
 
 def collect_depth_limited_nodes(node, max_depth=4, current_depth=0):
+    raise NotImplementedError("unchecked")
     """
     收集深度限制的节点
 
@@ -412,6 +305,7 @@ def collect_depth_limited_nodes(node, max_depth=4, current_depth=0):
 
     return result
 def req1(regex):
+    raise NotImplementedError("unchecked")
     """
     需求1：正则表达式转换为NFA
 
@@ -425,7 +319,7 @@ def req1(regex):
     regexlexer = RegexLexer(regex)
     tokenStream = regexlexer.lexer()
     print('AST for regex: ', regex)
-    parseRegex = ParseRegex(tokenStream)
+    parseRegex = RegexParser(tokenStream)
     ## handle Exception
     throwException = False
     AST = parseRegex.parse()
