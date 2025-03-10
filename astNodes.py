@@ -13,14 +13,21 @@ class AstNode(ABC):
         self.quantative = False
         self.min_repeat = 1
         self.max_repeat = 1
-        self.greedy = False
+        self.lazy = False
         self.start = False
         self.end = False
     
     def getState(self):
         pattern = ""
         if self.quantative:
-            pattern += f" min: {self.min_repeat}, max: {self.max_repeat}, greedy: {self.greedy}"
+            if self.min_repeat == self.max_repeat:
+                pattern += f" repeat: {self.min_repeat}"
+            elif self.max_repeat == -1:
+                pattern += f" repeat: {self.min_repeat}~inf"
+            else:
+                pattern += f" repeat: {self.min_repeat}~{self.max_repeat}"
+            if self.lazy:
+                pattern += " lazy"
         if self.start:
             pattern += " start"
         if self.end:

@@ -50,7 +50,7 @@ class RegexParser:
                 elif next_token.ttype == TokenType.OPEN_BRACE:
                     assert stream[temp_length+1] == TokenType.CLOSED_BRACE, "invalid quantifier"
                     temp_length += 2
-                # check greedy mark
+                # check lazy mark
                 if temp_length < len(stream):
                     next_token = stream[temp_length]
                     if next_token.ttype == TokenType.QUESTION_MARK:
@@ -94,9 +94,9 @@ class RegexParser:
                         lastNode.min_repeat = int(token.content)
                         lastNode.max_repeat = int(stream[stream_pointer].content)
                         nextOffset = 1
-                    # check greedy mark 
+                    # check lazy mark 
                     if stream_pointer + nextOffset < len(stream) and stream[stream_pointer + nextOffset].ttype == TokenType.QUESTION_MARK:
-                        lastNode.greedy = True
+                        lastNode.lazy = True
                         nextOffset += 1
                 stream_pointer += nextOffset
             elif token.ttype == TokenType.OPEN_PAREN:
